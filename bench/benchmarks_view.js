@@ -9,8 +9,7 @@ const benchmarkCooldownTime = 250;
 const benchmarkWarmupTime  = 250;
 
 const BenchmarksView = React.createClass({
-
-    render: function() {
+    render() {
         return <div style={{width: 960, paddingBottom: window.innerHeight, margin: '0 auto'}}>
             <h1 className="space-bottom">
                 Benchmarks
@@ -40,14 +39,14 @@ const BenchmarksView = React.createClass({
         </div>;
     },
 
-    renderBenchmark: function(name) {
+    renderBenchmark(name) {
         return <tr key={name}>
             <th><a href={`#${name}`} onClick={this.reload}>{name}</a></th>
             {Object.keys(this.state.results[name]).map(this.renderBenchmarkVersion.bind(this, name))}
         </tr>;
     },
 
-    renderBenchmarkVersion: function(name, version) {
+    renderBenchmarkVersion(name, version) {
         const results = this.state.results[name][version];
         const sampleData = results.samples ? results.samples.map(row => row.join(',')).join('\n') : null;
         return (
@@ -71,7 +70,7 @@ const BenchmarksView = React.createClass({
         );
     },
 
-    versions: function() {
+    versions() {
         const versions = [];
         for (const name in this.state.results) {
             for (const version in this.state.results[name]) {
@@ -83,7 +82,7 @@ const BenchmarksView = React.createClass({
         return versions;
     },
 
-    renderTextBenchmarks: function() {
+    renderTextBenchmarks() {
         const versions = this.versions();
         let output = `benchmark | ${versions.join(' | ')}\n---`;
         for (let i = 0; i < versions.length; i++) {
@@ -102,7 +101,7 @@ const BenchmarksView = React.createClass({
         return output;
     },
 
-    getInitialState: function() {
+    getInitialState() {
         const results = {};
 
         for (const name in this.props.benchmarks) {
@@ -117,34 +116,31 @@ const BenchmarksView = React.createClass({
             }
         }
 
-        return { results: results };
+        return { results };
     },
 
-    componentDidMount: function() {
-        const that = this;
-
-        asyncSeries(Object.keys(that.state.results), (name, callback) => {
-            asyncSeries(Object.keys(that.state.results[name]), (version, callback) => {
-                that.runBenchmark(name, version, callback);
+    componentDidMount() {
+        asyncSeries(Object.keys(this.state.results), (name, callback) => {
+            asyncSeries(Object.keys(this.state.results[name]), (version, callback) => {
+                const benchmark = this.props.benchmarks[name][version];
+                const results = this.state.results[name][version];
+                this.runBenchmark(benchmark, results, callback);
             }, callback);
         }, (err) => {
             if (err) throw err;
         });
     },
 
-    runBenchmark: function(name, version, outerCallback) {
-        const that = this;
-        const results = this.state.results[name][version];
-
-        function log(color, message) {
+    runBenchmark(benchmark, results, outerCallback) {
+        const log = (color, message) => {
             results.logs.push({
                 color: color || 'blue',
                 message: message
             });
-            that.forceUpdate();
+            this.forceUpdate();
         }
 
-        function callback() {
+        const callback = () => {
             setTimeout(outerCallback, benchmarkCooldownTime);
         }
 
@@ -152,11 +148,10 @@ const BenchmarksView = React.createClass({
         log('dark', 'starting');
 
         setTimeout(() => {
-            const emitter = that.props.benchmarks[name][version]();
+            const emitter = benchmark();
 
             emitter.on('log', (event) => {
                 log(event.color, event.message);
-
             });
 
             emitter.on('end', (event) => {
@@ -165,7 +160,6 @@ const BenchmarksView = React.createClass({
                 results.samples = event.samples;
                 log('green', event.message);
                 callback();
-
             });
 
             emitter.on('error', (event) => {
@@ -173,24 +167,23 @@ const BenchmarksView = React.createClass({
                 log('red', event.error);
                 callback();
             });
-
         }, benchmarkWarmupTime);
     },
 
-    getBenchmarkVersionStatus: function(name, version) {
+    getBenchmarkVersionStatus(name, version) {
         return this.state.results[name][version].status;
     },
 
-    getBenchmarkStatus: function(name) {
-        return reduceStatuses(Object.keys(this.state.results[name]).map(function(version) {
+    getBenchmarkStatus(name) {
+        return reduceStatuses(Object.keys(this.state.results[name]).map((version) => {
             return this.getBenchmarkVersionStatus(name, version);
-        }, this));
+        }));
     },
 
     getStatus() {
-        return reduceStatuses(Object.keys(this.state.results).map(function(name) {
+        return reduceStatuses(Object.keys(this.state.results).map((name) => {
             return this.getBenchmarkStatus(name);
-        }, this));
+        }));
     },
 
     reload() {
