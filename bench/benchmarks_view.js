@@ -120,54 +120,60 @@ const BenchmarksView = React.createClass({
     },
 
     componentDidMount() {
-        asyncSeries(Object.keys(this.state.results), (name, callback) => {
-            asyncSeries(Object.keys(this.state.results[name]), (version, callback) => {
-                const benchmark = this.props.benchmarks[name][version];
-                const results = this.state.results[name][version];
-                this.runBenchmark(benchmark, results, callback);
-            }, callback);
-        }, (err) => {
-            if (err) throw err;
-        });
+        let promise = Promise.resolve();
+
+        for (const name of Object.keys(this.state.results)) {
+            for (const version of Object.keys(this.state.results[name])) {
+                promise = promise.then(() => {
+                    return this.runBenchmark(
+                        this.props.benchmarks[name][version],
+                        this.state.results[name][version]);
+                });
+            }
+        }
+
+        return promise;
     },
 
-    runBenchmark(benchmark, results, outerCallback) {
-        const log = (color, message) => {
-            results.logs.push({
-                color: color || 'blue',
-                message: message
-            });
-            this.forceUpdate();
-        }
+    runBenchmark(benchmark, results) {
+        return new Promise((resolve) => {
+            const log = (color, message) => {
+                results.logs.push({
+                    color: color || 'blue',
+                    message: message
+                });
+                this.forceUpdate();
+            }
 
-        const callback = () => {
-            setTimeout(outerCallback, benchmarkCooldownTime);
-        }
+            const callback = () => {
+                setTimeout(resolve, benchmarkCooldownTime);
+            }
 
-        results.status = 'running';
-        log('dark', 'starting');
+            results.status = 'running';
+            log('dark', 'starting');
 
-        setTimeout(() => {
-            const emitter = benchmark();
+            setTimeout(() => {
+                const emitter = benchmark();
 
-            emitter.on('log', (event) => {
-                log(event.color, event.message);
-            });
+                emitter.on('log', (event) => {
+                    log(event.color, event.message);
+                });
 
-            emitter.on('end', (event) => {
-                results.message = event.message;
-                results.status = 'ended';
-                results.samples = event.samples;
-                log('green', event.message);
-                callback();
-            });
+                emitter.on('end', (event) => {
+                    results.message = event.message;
+                    results.status = 'ended';
+                    results.samples = event.samples;
+                    log('green', event.message);
+                    callback();
+                });
 
-            emitter.on('error', (event) => {
-                results.status = 'errored';
-                log('red', event.error);
-                callback();
-            });
-        }, benchmarkWarmupTime);
+                emitter.on('error', (event) => {
+                    results.status = 'errored';
+                    log('red', event.error);
+                    callback();
+                });
+            }, benchmarkWarmupTime);
+        });
     },
 
     getBenchmarkVersionStatus(name, version) {
@@ -213,14 +219,3 @@ ReactDOM.render(
     />,
     document.getElementById('benchmarks')
 );
-
-function asyncSeries(array, iterator, callback) {
-    if (array.length) {
-        iterator(array[0], (err) => {
-            if (err) callback(err);
-            else asyncSeries(array.slice(1), iterator, callback);
-        });
-    } else {
-        callback();
-    }
-}
